@@ -1,7 +1,6 @@
 serverUrl: https://eyesapi.applitools.com
 apiKey: ${APPLITOOLS_API_KEY}
 appName: Demo Checkbox App
-batchName: Checkbox Test Batch
 viewport:
   width: 1200
   height: 800
