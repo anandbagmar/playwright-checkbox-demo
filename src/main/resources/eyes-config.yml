@@ -5,6 +5,14 @@ viewport:
   width: 1200
   height: 800
 matchLevel: Strict
-browsers:
-  - { width: 1200, height: 800, name: CHROME }
-  - { width: 1200, height: 800, name: FIREFOX }
+browsersInfo:
+  - browserType: chrome
+    width: 1200
+    height: 800
+  - browserType: firefox
+    width: 1200
+    height: 800
+  - deviceName: iPhone_X
+    screenOrientation: portrait
+  - deviceName: Pixel_2
+    screenOrientation: portrait

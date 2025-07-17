@@ -5,7 +5,9 @@ import com.applitools.eyes.config.Configuration;
 import com.applitools.eyes.playwright.Eyes;
 import com.applitools.eyes.playwright.visualgrid.VisualGridRunner;
 import com.applitools.eyes.visualgrid.BrowserType;
+import com.applitools.eyes.visualgrid.model.DeviceName;
 import com.applitools.eyes.visualgrid.model.RenderBrowserInfo;
+import com.applitools.eyes.visualgrid.model.ScreenOrientation;
 import com.microsoft.playwright.Page;
 import org.yaml.snakeyaml.Yaml;
 
@@ -110,10 +112,24 @@ public class ApplitoolsUtil {
                 missing += result.getMissing();
 
                 sb.append("\tTest Name     : ").append(result.getName()).append("\n");
-                sb.append("\tBrowser       : ").append(browserInfo.getBrowserType().getName())
-                        .append(" @ ").append(browserInfo.getPlatform()).append("\n");
-                sb.append("\tViewport Size : ").append(browserInfo.getViewportSize().getWidth())
-                        .append("x").append(browserInfo.getViewportSize().getHeight()).append("\n");
+
+                if (browserInfo != null) {
+                    if (browserInfo.getEmulationInfo() != null && browserInfo.getEmulationInfo().getDeviceName() != null) {
+                        sb.append("\tDevice        : ").append(browserInfo.getEmulationInfo().getDeviceName())
+                                .append(" [").append(browserInfo.getEmulationInfo().getScreenOrientation()).append("]\n");
+                    } else {
+                        sb.append("\tBrowser       : ").append(browserInfo.getBrowserType().getName())
+                                .append(" @ ").append(browserInfo.getPlatform()).append("\n");
+
+                        RectangleSize vp = browserInfo.getViewportSize();
+                        if (vp != null) {
+                            sb.append("\tViewport Size : ").append(vp.getWidth()).append("x").append(vp.getHeight()).append("\n");
+                        } else {
+                            sb.append("\tViewport Size : not set\n");
+                        }
+                    }
+                }
+
                 sb.append("\tSteps         : ").append(result.getSteps()).append("\n");
                 sb.append("\tMatches       : ").append(result.getMatches()).append("\n");
                 sb.append("\tMismatches    : ").append(result.getMismatches()).append("\n");
@@ -137,6 +153,16 @@ public class ApplitoolsUtil {
         System.out.println(sb.toString());
     }
 
+
+    private static <E extends Enum<E>> E getEnumIgnoreCase(Class<E> enumClass, String value) {
+        for (E constant : enumClass.getEnumConstants()) {
+            if (constant.name().equalsIgnoreCase(value)) {
+                return constant;
+            }
+        }
+        throw new IllegalArgumentException("No enum constant in " + enumClass.getSimpleName() + " for value: " + value);
+    }
+
     private static Configuration loadConfig(String testName) {
         Yaml yaml = new Yaml();
         try (InputStream in = ApplitoolsUtil.class.getResourceAsStream("/eyes-config.yml")) {
@@ -155,13 +181,18 @@ public class ApplitoolsUtil {
             String level = cfg.get("matchLevel").toString().toUpperCase();
             config.setMatchLevel(MatchLevel.valueOf(level));
 
-            List<Map<String, Object>> browsers = (List<Map<String, Object>>) cfg.get("browsers");
+            List<Map<String, Object>> browsers = (List<Map<String, Object>>) cfg.get("browsersInfo");
             for (Map<String, Object> b : browsers) {
-                config.addBrowser(
-                        (int) b.get("width"),
-                        (int) b.get("height"),
-                        BrowserType.valueOf(b.get("name").toString())
-                );
+                if (b.containsKey("deviceName")) {
+                    DeviceName device = getEnumIgnoreCase(DeviceName.class, (String) b.get("deviceName"));
+                    ScreenOrientation orientation = getEnumIgnoreCase(ScreenOrientation.class, (String) b.getOrDefault("screenOrientation", "portrait"));
+                    config.addDeviceEmulation(device, orientation);
+                } else {
+                    int w = (Integer) b.get("width");
+                    int h = (Integer) b.get("height");
+                    BrowserType bt = getEnumIgnoreCase(BrowserType.class, (String) b.get("browserType"));
+                    config.addBrowser(w, h, bt);
+                }
             }
 
             printConfiguration(config, testName);
@@ -188,16 +219,24 @@ public class ApplitoolsUtil {
         if (browsers != null && !browsers.isEmpty()) {
             sb.append("\tBrowsers     :\n");
             for (RenderBrowserInfo b : browsers) {
-                com.applitools.eyes.selenium.BrowserType browserType = b.getBrowserType();
-                RectangleSize size = b.getViewportSize();
-                sb.append("\t  - ").append(browserType).append(" (").append(size.getWidth()).append("x").append(size.getHeight()).append(")\n");
+                if (b.getEmulationInfo() != null && b.getEmulationInfo().getDeviceName() != null) {
+                    // Mobile device emulation
+                    sb.append("\t  - ").append(b.getEmulationInfo().getDeviceName())
+                            .append(" [").append(b.getEmulationInfo().getScreenOrientation()).append("]\n");
+                } else if (b.getViewportSize() != null) {
+                    // Desktop browser with size
+                    RectangleSize size = b.getViewportSize();
+                    sb.append("\t  - ").append(b.getBrowserType())
+                            .append(" (").append(size.getWidth()).append("x").append(size.getHeight()).append(")\n");
+                } else {
+                    sb.append("\t  - [Unknown browser/device config]\n");
+                }
             }
         } else {
             sb.append("\tBrowsers     : [none configured]\n");
         }
 
         sb.append("==========================================================");
-
         System.out.println(sb.toString());
     }
 
