@@ -32,23 +32,6 @@ public class ApplitoolsUtil {
         eyes.open(page, appName, testName);
     }
 
-    private static VisualGridRunner getVisualGridRunner(String testName, boolean isParallelExecution) {
-        VisualGridRunner runner = threadLocalRunner.get();
-        if (null == runner) {
-            if (isParallelExecution) {
-                System.out.printf("Initializing VisualGrid Runner for executing test: '%s' in Parallel%n", testName);
-            } else {
-                System.out.println("Initializing VisualGrid Runner for executing tests in Sequence");
-            }
-            runner = new VisualGridRunner(10);
-            runner.setDontCloseBatches(true);
-            threadLocalRunner.set(runner);
-        } else {
-            System.out.println("VisualGrid Runner is already initialized");
-        }
-        return runner;
-    }
-
     public static Eyes getEyes() {
         return threadLocalEyes.get();
     }
@@ -79,12 +62,7 @@ public class ApplitoolsUtil {
         closeBatch();
     }
 
-    private static void printTestResults() {
-        TestResultsSummary summary = threadLocalRunner.get().getAllTestResults(false);
-        printPrettyTestResults(summary);
-    }
-
-    public static void printPrettyTestResults(TestResultsSummary summary) {
+    private static void printPrettyTestResults(TestResultsSummary summary) {
         int passed = 0, unresolved = 0, failed = 0, exceptions = 0;
         int matches = 0, mismatches = 0, missing = 0;
 
@@ -158,6 +136,27 @@ public class ApplitoolsUtil {
         System.out.println(sb.toString());
     }
 
+    private static void printTestResults() {
+        TestResultsSummary summary = threadLocalRunner.get().getAllTestResults(false);
+        printPrettyTestResults(summary);
+    }
+
+    private static VisualGridRunner getVisualGridRunner(String testName, boolean isParallelExecution) {
+        VisualGridRunner runner = threadLocalRunner.get();
+        if (null == runner) {
+            if (isParallelExecution) {
+                System.out.printf("Initializing VisualGrid Runner for executing test: '%s' in Parallel%n", testName);
+            } else {
+                System.out.println("Initializing VisualGrid Runner for executing tests in Sequence");
+            }
+            runner = new VisualGridRunner(10);
+            runner.setDontCloseBatches(true);
+            threadLocalRunner.set(runner);
+        } else {
+            System.out.println("VisualGrid Runner is already initialized");
+        }
+        return runner;
+    }
 
     private static <E extends Enum<E>> E getEnumIgnoreCase(Class<E> enumClass, String value) {
         for (E constant : enumClass.getEnumConstants()) {
