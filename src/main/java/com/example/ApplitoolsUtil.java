@@ -23,6 +23,16 @@ public class ApplitoolsUtil {
 
     public static void initEyes(Page page, String appName, String testName, boolean isParallelExecution) {
         System.out.printf("Initialize Eyes for test '%s' ...%n", testName);
+        VisualGridRunner runner = getVisualGridRunner(testName, isParallelExecution);
+
+        Eyes eyes = new Eyes(runner);
+        System.out.printf("Creating Eyes for '%s'%n", testName);
+        eyes.setConfiguration(loadConfig(testName));
+        threadLocalEyes.set(eyes);
+        eyes.open(page, appName, testName);
+    }
+
+    private static VisualGridRunner getVisualGridRunner(String testName, boolean isParallelExecution) {
         VisualGridRunner runner = threadLocalRunner.get();
         if (null == runner) {
             if (isParallelExecution) {
@@ -36,12 +46,7 @@ public class ApplitoolsUtil {
         } else {
             System.out.println("VisualGrid Runner is already initialized");
         }
-
-        Eyes eyes = new Eyes(runner);
-        System.out.printf("Creating Eyes for '%s'%n", testName);
-        eyes.setConfiguration(loadConfig(testName));
-        threadLocalEyes.set(eyes);
-        eyes.open(page, appName, testName);
+        return runner;
     }
 
     public static Eyes getEyes() {
@@ -169,9 +174,7 @@ public class ApplitoolsUtil {
             Map<String, Object> cfg = yaml.load(in);
             Configuration config = new Configuration();
             config.setServerUrl(cfg.get("serverUrl").toString());
-            String rawKey = cfg.get("apiKey").toString();
-            String resolvedKey = rawKey.replace("${APPLITOOLS_API_KEY}", System.getenv("APPLITOOLS_API_KEY"));
-            config.setApiKey(resolvedKey);
+            config.setApiKey(getApplitoolsAPIKey(cfg));
             config.setAppName(cfg.get("appName").toString());
             config.setBatch(batch);
 
@@ -181,49 +184,64 @@ public class ApplitoolsUtil {
             String level = cfg.get("matchLevel").toString().toUpperCase();
             config.setMatchLevel(MatchLevel.valueOf(level));
 
-            String rawIsDisabled = cfg.get("isDisabled").toString(); // expected: ${DISABLE_APPLITOOLS}
-            String envValueForDisableApplitools = System.getenv("DISABLE_APPLITOOLS");
-            String resolvedIsDisabled = rawIsDisabled.replace("${DISABLE_APPLITOOLS}", envValueForDisableApplitools != null ? envValueForDisableApplitools : "false");
-            boolean isDisabled = Boolean.parseBoolean(resolvedIsDisabled);
-            config.setIsDisabled(isDisabled);
-
-            // Load proxy config if present
-            Map<String, String> proxyMap = (Map<String, String>) cfg.get("proxy");
-            if (proxyMap != null && proxyMap.get("url") != null && !proxyMap.get("url").isEmpty()) {
-                String rawUrl = proxyMap.get("url");
-                String rawUser = proxyMap.getOrDefault("username", null);
-                String rawPass = proxyMap.getOrDefault("password", null);
-
-                String proxyUser = resolveEnv(rawUser);
-                String proxyPass = resolveEnv(rawPass);
-
-                ProxySettings proxy;
-                if (proxyUser != null && proxyPass != null) {
-                    proxy = new ProxySettings(rawUrl, proxyUser, proxyPass);
-                } else {
-                    proxy = new ProxySettings(rawUrl);
-                }
-                config.setProxy(proxy);
-            }
-
-            List<Map<String, Object>> browsers = (List<Map<String, Object>>) cfg.get("browsersInfo");
-            for (Map<String, Object> b : browsers) {
-                if (b.containsKey("deviceName")) {
-                    DeviceName device = getEnumIgnoreCase(DeviceName.class, (String) b.get("deviceName"));
-                    ScreenOrientation orientation = getEnumIgnoreCase(ScreenOrientation.class, (String) b.getOrDefault("screenOrientation", "portrait"));
-                    config.addDeviceEmulation(device, orientation);
-                } else {
-                    int w = (Integer) b.get("width");
-                    int h = (Integer) b.get("height");
-                    BrowserType bt = getEnumIgnoreCase(BrowserType.class, (String) b.get("browserType"));
-                    config.addBrowser(w, h, bt);
-                }
-            }
-
+            config.setIsDisabled(getIsDisabled(cfg));
+            addProxyDetailsInConfiguration(cfg, config);
+            addBrowsersAndDevicesInConfiguration(cfg, config);
             printConfiguration(config, testName);
             return config;
         } catch (Exception e) {
             throw new RuntimeException("Failed to load Applitools config", e);
+        }
+    }
+
+    private static String getApplitoolsAPIKey(Map<String, Object> cfg) {
+        String rawKey = cfg.get("apiKey").toString();
+        String resolvedKey = rawKey.replace("${APPLITOOLS_API_KEY}", System.getenv("APPLITOOLS_API_KEY"));
+        return resolvedKey;
+    }
+
+    private static boolean getIsDisabled(Map<String, Object> cfg) {
+        String rawIsDisabled = cfg.get("isDisabled").toString(); // expected: ${DISABLE_APPLITOOLS}
+        String envValueForDisableApplitools = System.getenv("DISABLE_APPLITOOLS");
+        String resolvedIsDisabled = rawIsDisabled.replace("${DISABLE_APPLITOOLS}", envValueForDisableApplitools != null ? envValueForDisableApplitools : "false");
+        boolean isDisabled = Boolean.parseBoolean(resolvedIsDisabled);
+        return isDisabled;
+    }
+
+    private static void addBrowsersAndDevicesInConfiguration(Map<String, Object> cfg, Configuration config) {
+        List<Map<String, Object>> browsers = (List<Map<String, Object>>) cfg.get("browsersInfo");
+        for (Map<String, Object> b : browsers) {
+            if (b.containsKey("deviceName")) {
+                DeviceName device = getEnumIgnoreCase(DeviceName.class, (String) b.get("deviceName"));
+                ScreenOrientation orientation = getEnumIgnoreCase(ScreenOrientation.class, (String) b.getOrDefault("screenOrientation", "portrait"));
+                config.addDeviceEmulation(device, orientation);
+            } else {
+                int w = (Integer) b.get("width");
+                int h = (Integer) b.get("height");
+                BrowserType bt = getEnumIgnoreCase(BrowserType.class, (String) b.get("browserType"));
+                config.addBrowser(w, h, bt);
+            }
+        }
+    }
+
+    private static void addProxyDetailsInConfiguration(Map<String, Object> cfg, Configuration config) {
+        // Load proxy config if present
+        Map<String, String> proxyMap = (Map<String, String>) cfg.get("proxy");
+        if (proxyMap != null && proxyMap.get("url") != null && !proxyMap.get("url").isEmpty()) {
+            String rawUrl = proxyMap.get("url");
+            String rawUser = proxyMap.getOrDefault("username", null);
+            String rawPass = proxyMap.getOrDefault("password", null);
+
+            String proxyUser = resolveEnv(rawUser);
+            String proxyPass = resolveEnv(rawPass);
+
+            ProxySettings proxy;
+            if (proxyUser != null && proxyPass != null) {
+                proxy = new ProxySettings(rawUrl, proxyUser, proxyPass);
+            } else {
+                proxy = new ProxySettings(rawUrl);
+            }
+            config.setProxy(proxy);
         }
     }
 
@@ -249,13 +267,23 @@ public class ApplitoolsUtil {
 
         sb.append("\tMatch Level  : ").append(config.getMatchLevel()).append("\n");
         sb.append("\tIs Disabled  : ").append(config.getIsDisabled()).append("\n");
+        addProxyInfoToMessage(config, sb);
+        addBrowserAndDevicesInfoToMessage(config, sb);
+
+        sb.append("==========================================================");
+        System.out.println(sb.toString());
+    }
+
+    private static void addProxyInfoToMessage(Configuration config, StringBuilder sb) {
         AbstractProxySettings proxy = config.getProxy();
         if (null != proxy) {
             sb.append("\tProxy        : ").append(proxy).append("\n");
         } else {
             sb.append("\tProxy        : Not Set").append("\n");
         }
+    }
 
+    private static void addBrowserAndDevicesInfoToMessage(Configuration config, StringBuilder sb) {
         List<RenderBrowserInfo> browsers = config.getBrowsersInfo();
         if (browsers != null && !browsers.isEmpty()) {
             sb.append("\tBrowsers     :\n");
@@ -276,9 +304,6 @@ public class ApplitoolsUtil {
         } else {
             sb.append("\tBrowsers     : [none configured]\n");
         }
-
-        sb.append("==========================================================");
-        System.out.println(sb.toString());
     }
 
     private static void closeBatch() {
