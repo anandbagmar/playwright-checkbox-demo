@@ -5,6 +5,11 @@ viewport:
   width: 1200
   height: 800
 matchLevel: Strict
+isDisabled: ${DISABLE_APPLITOOLS}
+proxy:
+  username: ${PROXY_USERNAME}
+  password: ${PROXY_PASSWORD}
+  url: ""
 browsersInfo:
   - browserType: chrome
     width: 1200

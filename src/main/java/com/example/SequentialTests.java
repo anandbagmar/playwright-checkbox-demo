@@ -5,6 +5,8 @@ import com.microsoft.playwright.*;
 
 public class SequentialTests {
 
+    private static final String appName = "The Internet-Sequential";
+
     public static void main(String[] args) {
         Playwright playwright = null;
 
@@ -31,7 +33,7 @@ public class SequentialTests {
         Page page = browser.newPage();
 
         try {
-            ApplitoolsUtil.initEyes(page, "The Internet-Sequential", "Checkbox Navigation Test", false);
+            ApplitoolsUtil.initEyes(page, appName, "Checkbox Navigation Test", false);
             navigateToHomepage(page);
             openCheckboxesPage(page);
             checkFirstCheckbox(page);
@@ -47,7 +49,7 @@ public class SequentialTests {
         Page page = browser.newPage();
 
         try {
-            ApplitoolsUtil.initEyes(page, "The Internet-Sequential", "Context Menu Navigation Test", false);
+            ApplitoolsUtil.initEyes(page, appName, "Context Menu Navigation Test", false);
             navigateToHomepage(page);
             openContextMenu(page);
             goBackToHomepage(page);
@@ -69,6 +71,7 @@ public class SequentialTests {
     private static void openCheckboxesPage(Page page) {
         page.click("text=Checkboxes");
         ApplitoolsUtil.getEyes().check("openCheckboxesPage", Target.window().fully());
+        ApplitoolsUtil.getEyes().check("openCheckboxesPage-region", Target.region("text=Checkboxes"));
     }
 
     private static void openContextMenu(Page page) {

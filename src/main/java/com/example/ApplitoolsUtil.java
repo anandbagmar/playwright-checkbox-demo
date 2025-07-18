@@ -181,6 +181,31 @@ public class ApplitoolsUtil {
             String level = cfg.get("matchLevel").toString().toUpperCase();
             config.setMatchLevel(MatchLevel.valueOf(level));
 
+            String rawIsDisabled = cfg.get("isDisabled").toString(); // expected: ${DISABLE_APPLITOOLS}
+            String envValueForDisableApplitools = System.getenv("DISABLE_APPLITOOLS");
+            String resolvedIsDisabled = rawIsDisabled.replace("${DISABLE_APPLITOOLS}", envValueForDisableApplitools != null ? envValueForDisableApplitools : "false");
+            boolean isDisabled = Boolean.parseBoolean(resolvedIsDisabled);
+            config.setIsDisabled(isDisabled);
+
+            // Load proxy config if present
+            Map<String, String> proxyMap = (Map<String, String>) cfg.get("proxy");
+            if (proxyMap != null && proxyMap.get("url") != null && !proxyMap.get("url").isEmpty()) {
+                String rawUrl = proxyMap.get("url");
+                String rawUser = proxyMap.getOrDefault("username", null);
+                String rawPass = proxyMap.getOrDefault("password", null);
+
+                String proxyUser = resolveEnv(rawUser);
+                String proxyPass = resolveEnv(rawPass);
+
+                ProxySettings proxy;
+                if (proxyUser != null && proxyPass != null) {
+                    proxy = new ProxySettings(rawUrl, proxyUser, proxyPass);
+                } else {
+                    proxy = new ProxySettings(rawUrl);
+                }
+                config.setProxy(proxy);
+            }
+
             List<Map<String, Object>> browsers = (List<Map<String, Object>>) cfg.get("browsersInfo");
             for (Map<String, Object> b : browsers) {
                 if (b.containsKey("deviceName")) {
@@ -202,6 +227,15 @@ public class ApplitoolsUtil {
         }
     }
 
+    private static String resolveEnv(String value) {
+        if (value == null) return null;
+        if (value.startsWith("${") && value.endsWith("}")) {
+            String envKey = value.substring(2, value.length() - 1);
+            return System.getenv(envKey);
+        }
+        return value;
+    }
+
     private static void printConfiguration(Configuration config, String testName) {
         StringBuilder sb = new StringBuilder();
         sb.append("\n=== Applitools Configuration for test: '").append(testName).append("' ===\n");
@@ -214,6 +248,13 @@ public class ApplitoolsUtil {
         sb.append("\tViewport     : ").append(vp != null ? vp.getWidth() + "x" + vp.getHeight() : "not set").append("\n");
 
         sb.append("\tMatch Level  : ").append(config.getMatchLevel()).append("\n");
+        sb.append("\tIs Disabled  : ").append(config.getIsDisabled()).append("\n");
+        AbstractProxySettings proxy = config.getProxy();
+        if (null != proxy) {
+            sb.append("\tProxy        : ").append(proxy).append("\n");
+        } else {
+            sb.append("\tProxy        : Not Set").append("\n");
+        }
 
         List<RenderBrowserInfo> browsers = config.getBrowsersInfo();
         if (browsers != null && !browsers.isEmpty()) {
